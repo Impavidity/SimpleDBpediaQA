@@ -5,18 +5,19 @@
 from argparse import ArgumentParser
 import os
 import math
+from tqdm import tqdm
 from collections import defaultdict
 from SPARQLWrapper import SPARQLWrapper, JSON
 sparql = SPARQLWrapper("http://dbpedia.org/sparql")
 
-def valid_combination(entity, relation, direction, constraint=None):
+def valid_combination(entity, relation, direction, constraint='None'):
     if direction == "forward":
         query_str = 'SELECT ?a WHERE {' + '<{}> <{}> ?a . '.format(entity.replace('"', "%22").replace("'", "%27"), relation)
-        if constraint != None:
+        if constraint != 'None':
             query_str += '?a <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <{}>'.format(constraint)
     else:
         query_str = 'SELECT ?a WHERE {' + '?a <{}> <{}> . '.format(relation, entity.replace('"', "%22").replace("'", "%27"))
-        if constraint != None:
+        if constraint != 'None':
             query_str += '?a <http://www.w3.org/1999/02/22-rdf-syntax-ns#type> <{}>'.format(constraint)
     query_str += '}'
     sparql.setQuery(query_str)
@@ -46,7 +47,7 @@ def get_answers(filename):
             line = line.strip().split('\t')
             idx = line[0]
             sub = line[2]
-            rel = line[3]
+            rel = line[5]
             id2sub[idx] = sub
             id2rel[idx] = rel
 
@@ -99,7 +100,7 @@ def evidence_integration(data_path, ent_path, rel_path, output_dir, HITS_ENT, HI
     lineids_found2 = []
     lineids_found3 = []
 
-    for idx in idxs:
+    for idx in tqdm(idxs):
         if idx not in id2predictedEntity and idx not in id2rels:
             notfound_both += 1
             continue
@@ -114,16 +115,23 @@ def evidence_integration(data_path, ent_path, rel_path, output_dir, HITS_ENT, HI
         predictedEntity = id2predictedEntity[idx]
         predictedRel = id2rels[idx]
         if is_heuristics:
+            possible_combination = []
             for (entity, entity_score) in predictedEntity:
                 entity_norm = normalize_entity(entity)
                 for (raw_rel, rel_label, rel_score) in predictedRel:
-                    rel = raw_rel.split("@")
-                    rel = (rel[0], rel[1])
-                    if valid_combination(entity_norm, rel[0], rel[1]):
-                        comb_score = (entity_score ** 0.6) * (rel_score ** 0.1)
-                        id2answers[idx].append((entity_norm, raw_rel, entity_score, rel_score, comb_score))
+                    comb_score = (entity_score ** 0.6) * (rel_score ** 0.1)
+                    possible_combination.append((entity_norm, raw_rel, entity_score, rel_score, comb_score))
 
-            id2answers[idx].sort(key=lambda t: t[4], reverse=True)
+            possible_combination.sort(key=lambda t: t[4], reverse=True)
+            for possible_candidate in possible_combination:
+                raw_rel = possible_candidate[1]
+                entity_norm = possible_candidate[0]
+                rel = raw_rel.split("@")
+                rel = (rel[0], rel[1], rel[2])
+                if valid_combination(entity_norm, rel[0], rel[1], rel[2]):
+                    id2answers[idx].append(possible_candidate)
+                if len(id2answers[idx]) > 1:
+                    break
         else:
             id2answers[idx] = [(predictedEntity[0][0], predictedRel[0][0])]
 
@@ -137,13 +145,13 @@ def evidence_integration(data_path, ent_path, rel_path, output_dir, HITS_ENT, HI
         fout.write('\n')
         truth_entity = id2goldEntity[idx]
         truth_rel = id2goldRels[idx]
-        flag = 0
+        # flag = 0
         if len(id2answers[idx]) >= 1 and id2answers[idx][0][0] == truth_entity \
                 and id2answers[idx][0][1] == truth_rel:
             retrieved_top1 += 1
             retrieved_top2 += 1
             retrieved_top3 += 1
-            flag += 1
+            # flag += 1
             lineids_found1.append(idx)
         elif len(id2answers[idx]) >= 2 and id2answers[idx][1][0] == truth_entity \
                 and id2answers[idx][1][1] == truth_rel:
@@ -155,9 +163,9 @@ def evidence_integration(data_path, ent_path, rel_path, output_dir, HITS_ENT, HI
             retrieved_top3 += 1
             lineids_found3.append(idx)
 
-        if flag == 1:
-            print(idx, truth_entity, truth_rel, truth_obj, id2answers[idx][0])
-            break
+        # if flag == 1:
+        #     print(idx, truth_entity, truth_rel, id2answers[idx][0])
+        #     break
     print()
     print("found:              {}".format(found / len(id2goldEntity) * 100.0))
     print("retrieved at top 1: {}".format(retrieved_top1 / len(id2goldEntity) * 100.0))
@@ -182,7 +190,7 @@ if __name__=="__main__":
     parser.add_argument('--data_path', type=str)
     parser.add_argument('--ent_path', type=str, help='path to the entity linking results')
     parser.add_argument('--rel_path', type=str, help='path to the relation prediction results')
-    parser.add_argument('--hits_ent', type=int, default=50, help='the hits here has to be <= the hits in entity linking')
+    parser.add_argument('--hits_ent', type=int, default=5, help='the hits here has to be <= the hits in entity linking')
     parser.add_argument('--hits_rel', type=int, default=5, help='the hits here has to be <= the hits in relation prediction retrieval')
     parser.add_argument('--no_heuristics', action='store_false', help='do not use heuristics', dest='heuristics')
     parser.add_argument('--output_dir', type=str, default="./results")
