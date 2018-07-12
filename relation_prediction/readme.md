@@ -55,3 +55,32 @@ Dataset: test
 test Precision:  88.563118%
 no. retrieved: 8502 out of 8595
 test Retrieval Rate  98.917976
+
+
+GRU
+
+p8shi@dragon00:/mnt/collections/p8shi/dev/SimpleDBPediaQA/relation_prediction$ python top_retrieval.py --relation_prediction_mode GRU --trained_model saved_checkpoints/gru/gru__best_model.pt --hits 5
+Note: You are using GPU for training
+RelationPrediction (
+  (embed): Embedding(31598, 300)
+  (gru): GRU(300, 300, num_layers=2, dropout=0.3, bidirectional=True)
+  (dropout): Dropout (p = 0.3)
+  (relu): ReLU ()
+  (hidden2tag): Sequential (
+    (0): Linear (600 -> 600)
+    (1): BatchNorm1d(600, eps=1e-05, momentum=0.1, affine=True)
+    (2): ReLU ()
+    (3): Dropout (p = 0.3)
+    (4): Linear (600 -> 170)
+  )
+)
+Dataset: valid
+/mnt/collections/p8shi/dev/SimpleDBPediaQA/relation_prediction/relation_prediction.py:85: UserWarning: RNN module weights are not part of single contiguous chunk of memory. This means they need to be compacted at every call, possibly greately increasing memory usage. To compact weights again call flatten_parameters().
+  outputs, ht = self.gru(x, h0)
+valid Precision:  88.106852%
+no. retrieved: 4260 out of 4305
+valid Retrieval Rate  98.954704
+Dataset: test
+test Precision:  88.097731%
+no. retrieved: 8493 out of 8595
+test Retrieval Rate  98.813264
